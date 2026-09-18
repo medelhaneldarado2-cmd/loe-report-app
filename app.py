@@ -12,7 +12,6 @@ st.set_page_config(page_title="Авто-заполнение LOE отчета", 
 st.title("⚡ Автоматическое заполнение LOE отчета")
 st.write("Загрузите файлы, и система сама извлечет продажи, остатки и себестоимость.")
 
-# Функция для корректного чтения специфичных Excel-файлов из 1С
 def get_col_index(cell_ref):
     match = re.match(r"([A-Z]+)[0-9]+", cell_ref)
     if not match: return -1
@@ -59,7 +58,6 @@ def parse_1c_excel(file_bytes):
         st.error(f"Ошибка чтения файла: {e}")
     return pd.DataFrame(data)
 
-# Интерфейс загрузки файлов
 st.subheader("1. Загрузка данных")
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -75,7 +73,7 @@ if st.button("Сформировать отчет", type="primary", use_containe
     else:
         with st.spinner("Анализирую данные и заполняю отчет..."):
             try:
-                # 1. Читаем базовый отчет (шаблон)
+                # Читаем базовый отчет
                 df_main = parse_1c_excel(base_file)
                 header = df_main.iloc[0].tolist()
                 df_main = df_main[1:].copy()
@@ -91,7 +89,10 @@ if st.button("Сформировать отчет", type="primary", use_containe
                         new_cols.append(c)
                 df_main.columns = new_cols
                 
-                # 2. Читаем остатки
+                # ПРИНУДИТЕЛЬНО делаем все колонки универсальными (чтобы избежать конфликта текста и цифр)
+                df_main = df_main.astype(object)
+                
+                # Читаем остатки
                 df_stock = parse_1c_excel(stock_file)
                 stock_data = {}
                 header_idx = -1
@@ -113,7 +114,7 @@ if st.button("Сформировать отчет", type="primary", use_containe
                                 if qty_str: stock_data[art] = float(qty_str)
                             except: pass
 
-                # 3. Читаем продажи и себестоимость
+                # Читаем продажи
                 sales_data = {}
                 costs_data = {}
                 for f in daily_files:
@@ -140,7 +141,7 @@ if st.button("Сформировать отчет", type="primary", use_containe
                                     qty = float(qty_str) if qty_str else 0
                                     
                                     seb_idx = headers.index('Себест-сть')
-                                    cost_str = str(row[seb_idx]).replace(' ', '').replace(',', '.')
+                                    cost_str = str(row[seb_idx]).replace('\xa0', '').replace(' ', '').replace(',', '.')
                                     cost = float(cost_str) if cost_str else 0
                                     
                                     if date_str not in sales_data: sales_data[date_str] = {}
@@ -148,10 +149,12 @@ if st.button("Сформировать отчет", type="primary", use_containe
                                     costs_data[art] = cost
                                 except: pass
                 
-                # 4. Обновляем главный отчет (ИСПРАВЛЕННЫЙ БЛОК)
+                # Обновляем главный отчет
                 for date_str in sales_data.keys():
                     if date_str not in df_main.columns:
-                        df_main[date_str] = None  # Изменили пустую строку на None, чтобы разрешить цифры
+                        df_main[date_str] = None
+                    # Делаем новые колонки тоже универсальными
+                    df_main[date_str] = df_main[date_str].astype(object)
                         
                 for idx, row in df_main.iterrows():
                     art = str(row['Артикул']).strip()
@@ -162,7 +165,7 @@ if st.button("Сформировать отчет", type="primary", use_containe
                 df_main['Остаток товара'] = df_main['Артикул'].apply(lambda x: stock_data.get(str(x).strip(), None))
                 df_main['Себестоимость'] = df_main['Артикул'].apply(lambda x: costs_data.get(str(x).strip(), None))
                 
-                # 5. Сохраняем и отдаем файл
+                # Сохраняем в Excel
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     df_main.to_excel(writer, index=False, sheet_name="Общий отчет")
