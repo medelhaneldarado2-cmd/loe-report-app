@@ -117,7 +117,6 @@ if st.button("Сформировать отчет", type="primary", use_containe
                 sales_data = {}
                 costs_data = {}
                 for f in daily_files:
-                    # Извлекаем дату из имени файла (например, 18.09 -> 18.09.2026)
                     date_str = f.name.replace('.xlsx', '.2026') 
                     df_d = parse_1c_excel(f)
                     
@@ -141,7 +140,7 @@ if st.button("Сформировать отчет", type="primary", use_containe
                                     qty = float(qty_str) if qty_str else 0
                                     
                                     seb_idx = headers.index('Себест-сть')
-                                    cost_str = str(row[seb_idx]).replace('\xa0', '').replace(',', '.')
+                                    cost_str = str(row[seb_idx]).replace(' ', '').replace(',', '.')
                                     cost = float(cost_str) if cost_str else 0
                                     
                                     if date_str not in sales_data: sales_data[date_str] = {}
@@ -149,10 +148,10 @@ if st.button("Сформировать отчет", type="primary", use_containe
                                     costs_data[art] = cost
                                 except: pass
                 
-                # 4. Обновляем главный отчет
+                # 4. Обновляем главный отчет (ИСПРАВЛЕННЫЙ БЛОК)
                 for date_str in sales_data.keys():
                     if date_str not in df_main.columns:
-                        df_main[date_str] = ""
+                        df_main[date_str] = None  # Изменили пустую строку на None, чтобы разрешить цифры
                         
                 for idx, row in df_main.iterrows():
                     art = str(row['Артикул']).strip()
@@ -160,8 +159,8 @@ if st.button("Сформировать отчет", type="primary", use_containe
                         if art in items:
                             df_main.at[idx, dt] = items[art]
                             
-                df_main['Остаток товара'] = df_main['Артикул'].apply(lambda x: stock_data.get(str(x).strip(), 0))
-                df_main['Себестоимость'] = df_main['Артикул'].apply(lambda x: costs_data.get(str(x).strip(), ""))
+                df_main['Остаток товара'] = df_main['Артикул'].apply(lambda x: stock_data.get(str(x).strip(), None))
+                df_main['Себестоимость'] = df_main['Артикул'].apply(lambda x: costs_data.get(str(x).strip(), None))
                 
                 # 5. Сохраняем и отдаем файл
                 output = io.BytesIO()
